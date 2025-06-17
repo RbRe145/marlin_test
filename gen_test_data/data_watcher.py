@@ -9,4 +9,4 @@ def inspect_npy_directory(dir_path):
             print(f"{filename}: dtype={arr.dtype}, shape={arr.shape}")
 
 if __name__ == "__main__":
-    inspect_npy_directory("/root/vllm/gen_test_data/moe_int4_awq_data_gpu")
+    inspect_npy_directory("/root/paddlejob/workspace/env_run/output/zhenghuaijin/marlin_test/gen_test_data/moe_int4_awq_data_gpu_using_paddle")

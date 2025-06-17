@@ -69,8 +69,11 @@ def marlin_zero_points(zp: paddle.Tensor, size_k: int, size_n: int,
     else:
         raise Exception("num_bits must be 4 or 8, got {}".format(num_bits))
 
-    zp = zp.reshape((-1, len(interleave)))[:, interleave].ravel()
-    zp = zp.reshape((-1, size_n)).contiguous()
+    # zp = zp.reshape((-1, len(interleave)))[:, interleave].ravel()
+    zp = zp.reshape([-1, len(interleave)])[:, interleave]
+    zp = paddle.flatten(zp)                  # 等价于 ravel()
+    zp = zp.reshape([-1, size_n]) 
+    # zp = zp.reshape((-1, size_n)).contiguous()
     zp = pack_cols(zp, num_bits, size_k, size_n)
 
     return zp

@@ -83,7 +83,7 @@ def test_moe_group_gemm2(tensor_dict, M, N, K, E, topk):
 
 def load_tensors():
     test_dir = os.path.dirname(os.path.abspath(__file__))
-    test_dir = os.path.join(test_dir, "dump")
+    test_dir = os.path.join(test_dir, "dump_paddle_q")
 
     def load_to_tensor(name):
         array = np.load(f"{test_dir}/{name}.npy", allow_pickle=True)

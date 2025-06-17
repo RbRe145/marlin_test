@@ -54,7 +54,7 @@ def quantize_weights(w: paddle.Tensor,
         "to have group zero points, group_size must be provided "\
         "(-1 group_size is channelwise)"
 
-    orig_device = w.device
+    orig_device = w.place
     orig_type = w.dtype
     size_k, size_n = w.shape
 
@@ -66,24 +66,29 @@ def quantize_weights(w: paddle.Tensor,
     # Reshape to [groupsize, -1]
     if group_size is not None and group_size < size_k:
         w = w.reshape((-1, group_size, size_n))
-        w = w.permute(1, 0, 2)
+        w = paddle.transpose(w, perm=[1, 0, 2])
         w = w.reshape((group_size, -1))
 
     # Compute scale for each group
-    max_val = paddle.max(w, 0, keepdim=True).values
-    min_val = paddle.min(w, 0, keepdim=True).values
+    max_val = paddle.max(w, 0, keepdim=True)
+    min_val = paddle.min(w, 0, keepdim=True)
 
     max_q_val = quant_type.max()
     min_q_val = quant_type.min()
 
-    w_s = paddle.Tensor([1.0]).to(w.device)  # unscaled case
+    w_s = paddle.to_tensor([1.0], dtype=w.dtype, place=w.place)
     maybe_w_zp = None
     if group_size is not None:
         if zero_points:
             assert not quant_type.is_signed() and quant_type.max() > 0
-            w_s = (max_val - min_val).clamp(min=1e-5) / quant_type.max()
-            maybe_w_zp = paddle.round(paddle.abs(min_val / w_s)) \
-                .clamp(min_q_val, max_q_val).int()
+            delta = max_val - min_val
+            delta_clamped = paddle.clip(delta, min=1e-5) 
+            w_s = delta_clamped / quant_type.max()
+            
+            delta2    = paddle.abs(min_val / w_s)
+            rounded  = paddle.round(delta2)
+            clamped  = paddle.clip(rounded, min=min_q_val, max=max_q_val)
+            maybe_w_zp = clamped.astype('int32')
         else:
             # If the bias is such that there are no possible negative/positive
             #  values, set the max value to inf to avoid divide by 0
@@ -92,8 +97,8 @@ def quantize_weights(w: paddle.Tensor,
                 abs(min_val / (min_q_val if min_q_val != 0 else paddle.inf)))
 
     # Quantize
-    w_q = paddle.round(w / w_s).int() + (maybe_w_zp if zero_points else 0)
-    w_q = paddle.clamp(w_q, min_q_val, max_q_val)
+    w_q = paddle.round(w / w_s).astype('int32') + (maybe_w_zp if zero_points else 0)
+    w_q = w_q.clip(min=min_q_val, max=max_q_val)
 
     # Compute ref (dequantized)
     # For some kernels (namely Machete) the zero-points are applied after the
@@ -112,7 +117,7 @@ def quantize_weights(w: paddle.Tensor,
 
         def reshape_w(w):
             w = w.reshape((group_size, -1, size_n))
-            w = w.permute(1, 0, 2)
+            w = paddle.transpose(w, perm=[1, 0, 2])
             w = w.reshape((size_k, size_n)).contiguous()
             return w
 
@@ -178,12 +183,12 @@ def pack_cols(
     size_k: int,
     size_n: int,
 ):
-    assert q_w.shape == (size_k, size_n)
+    assert q_w.shape == [size_k, size_n]
 
     pack_factor = get_pack_factor(num_bits)
     assert size_n % pack_factor == 0
 
-    orig_device = q_w.device
+    orig_device = q_w.place
 
     q_w = q_w.cpu().numpy().astype(numpy.uint32)
 
@@ -192,8 +197,8 @@ def pack_cols(
     for i in range(pack_factor):
         q_res |= q_w[:, i::pack_factor] << num_bits * i
 
-    q_res = paddle.from_numpy(q_res.astype(numpy.int32)).to(orig_device)
-    q_res = q_res.contiguous()
+    q_res = paddle.to_tensor(q_res.astype(numpy.int32), place=orig_device)
+    # q_res = q_res.contiguous()
 
     return q_res
 

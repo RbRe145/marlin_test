@@ -30,13 +30,13 @@ class MarlinWorkspace:
 
 
 def marlin_permute_weights(q_w, size_k, size_n, perm, tile=GPTQ_MARLIN_TILE):
-    assert q_w.shape == (size_k, size_n)
+    assert q_w.shape == [size_k, size_n], f"{q_w.shape}   {size_k}   {size_n}"
     assert size_k % tile == 0, f"size_k = {size_k}, tile = {tile}"
     assert size_n % tile == 0, f"size_k = {size_n}, tile = {tile}"
 
     # Permute weights to 16x64 marlin tiles
     q_w = q_w.reshape((size_k // tile, tile, size_n // tile, tile))
-    q_w = q_w.permute((0, 2, 1, 3))
+    q_w = paddle.transpose(q_w, perm=[0, 2, 1, 3])
     q_w = q_w.reshape((size_k // tile, size_n * tile))
 
     q_w = q_w.reshape((-1, perm.numel()))[:, perm].reshape(q_w.shape)
@@ -50,7 +50,7 @@ def marlin_weights(q_w, size_k, size_n, num_bits, perm):
 
     # Pack
     pack_factor = get_pack_factor(num_bits)
-    orig_device = q_w.device
+    orig_device = q_w.place
 
     q_w = q_w.cpu().numpy().astype(np.uint32)
 
@@ -59,7 +59,7 @@ def marlin_weights(q_w, size_k, size_n, num_bits, perm):
     for i in range(pack_factor):
         q_packed |= q_w[:, i::pack_factor] << num_bits * i
 
-    q_packed = paddle.from_numpy(q_packed.astype(np.int32)).to(orig_device)
+    q_packed = paddle.to_tensor(q_packed.astype(np.int32), place=orig_device)
 
     return q_packed
 
@@ -90,7 +90,7 @@ def get_weight_perm(num_bits: int):
         raise Exception("num_bits must be 4 or 8, got {}".format(num_bits))
 
     perm = perm.reshape((-1, len(interleave)))[:, interleave].ravel()
-    perm = paddle.from_numpy(perm)
+    perm = paddle.to_tensor(perm)
     return perm
 
 
@@ -124,6 +124,6 @@ def awq_marlin_quantize(w: paddle.Tensor, quant_type: ScalarType,
     # Create result
     res_list = [w_ref, marlin_q_w, marlin_s, marlin_zp]
     for i in range(len(res_list)):
-        res_list[i] = res_list[i].to(w.device)
+        res_list[i] = res_list[i].to(w.place)
 
     return res_list
