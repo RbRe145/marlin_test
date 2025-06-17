@@ -186,8 +186,8 @@ def test_moe_decode(tensor_dict):
 
 def test_main():
     tensor_dict = load_tensors()
-    #test_moe_gemm(tensor_dict)
-    test_moe_decode(tensor_dict)
+    test_moe_gemm(tensor_dict)
+    # test_moe_decode(tensor_dict)
 
 
 if __name__ == "__main__":
