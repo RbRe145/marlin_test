@@ -4,7 +4,7 @@ import numpy as np
 import paddle
 from paddle.base.core import moe_wna16_marlin_gemm
 import fused_marlin_moe
-
+from utils.marlin_utils_test import awq_marlin_quantize
 
 def test_moe_group_gemm1(tensor_dict, M, N, K, E, topk):
     block_size_m = 8
